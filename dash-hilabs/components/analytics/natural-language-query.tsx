@@ -17,7 +17,6 @@ export function NaturalLanguageQuery() {
     "What's our overall data quality score?",
     "Show providers with phone formatting issues",
     "Which specialties have the most issues?",
-    "Generate compliance report for expired licenses",
   ]
 
   const handleSubmit = async (e: React.FormEvent) => {

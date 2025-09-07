@@ -36,7 +36,6 @@ export function AIAssistantSidebar({ isOpen, onClose }: AIAssistantSidebarProps)
     "How many providers have expired licenses?",
     "Show providers with phone formatting issues",
     "Which specialties have the most issues?",
-    "Generate compliance report for expired licenses",
   ]
 
   const handleSendMessage = () => {

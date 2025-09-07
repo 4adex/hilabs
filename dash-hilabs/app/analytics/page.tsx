@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { FileText, AlertTriangle, BarChart3, PieChart, Bot, Users } from "lucide-react"
 import { DataQualityChart } from "@/components/analytics/data-quality-chart"
 import { IssuesBySpecialtyChart } from "@/components/analytics/issues-by-specialty-chart"
+import { SpecialtyExperienceChart } from "@/components/analytics/specialty-experience-chart"
+import { ProvidersByStateChart } from "@/components/analytics/providers-by-state-chart"
 import { Sidebar } from "@/components/layout/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import Link from "next/link"
@@ -148,10 +150,6 @@ export default function AnalyticsPage() {
                     Ask AI Assistant
                   </Button>
                 </Link>
-                <Button size="sm" variant="outline">
-                  <FileText className="w-4 h-4 mr-2" />
-                  Generate Compliance Report
-                </Button>
               </div>
             </div>
           </div>
@@ -268,17 +266,15 @@ export default function AnalyticsPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center font-heading">
                     <BarChart3 className="w-5 h-5 mr-2" />
-                    Provider Data Quality Trends
+                    Provider Distribution by State
                   </CardTitle>
-                  <div className="flex space-x-2">
-                    <Badge variant="outline">7D</Badge>
-                    <Badge variant="default">30D</Badge>
-                    <Badge variant="outline">90D</Badge>
-                  </div>
+                  <CardDescription>
+                    Geographic distribution of healthcare providers across states
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Suspense fallback={<div className="h-[300px] bg-muted animate-pulse rounded" />}>
-                    <DataQualityChart />
+                    <ProvidersByStateChart />
                   </Suspense>
                 </CardContent>
               </Card>
@@ -287,8 +283,11 @@ export default function AnalyticsPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center font-heading">
                     <PieChart className="w-5 h-5 mr-2" />
-                    Issues by Specialty
+                    Provider Distribution by Specialty
                   </CardTitle>
+                  <CardDescription>
+                    Interactive view of provider count and data quality issues across medical specialties
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Suspense fallback={<div className="h-[300px] bg-muted animate-pulse rounded" />}>
@@ -298,8 +297,26 @@ export default function AnalyticsPage() {
               </Card>
             </div>
 
-            {/* Records with Most Issues */}
+            {/* Experience Distribution Chart */}
             <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center font-heading">
+                  <BarChart3 className="w-5 h-5 mr-2" />
+                  Provider Experience Distribution by Specialty
+                </CardTitle>
+                <CardDescription>
+                  Box plot showing the distribution of years in practice across different medical specialties
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Suspense fallback={<div className="h-[400px] bg-muted animate-pulse rounded" />}>
+                  <SpecialtyExperienceChart />
+                </Suspense>
+              </CardContent>
+            </Card>
+
+            Records with Most Issues
+            {/* <Card>
               <CardHeader>
                 <CardTitle className="font-heading">Records with Most Issues</CardTitle>
                 <CardDescription>Providers requiring immediate attention</CardDescription>
@@ -341,7 +358,7 @@ export default function AnalyticsPage() {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
           </div>
         </div>
       </div>
