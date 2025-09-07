@@ -23,6 +23,7 @@ import {
   Settings,
   Upload,
   Home,
+  Users,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -75,6 +76,8 @@ export function Sidebar({ className }: SidebarProps) {
 
   const navigationLinks = [
     { href: "/analytics", label: "Analytics Dashboard", icon: BarChart3 },
+    { href: "/analytics/providers", label: "Provider Directory", icon: Users },
+    { href: "/analytics/duplicates", label: "Dupllicate Analysis", icon: Copy },
     { href: "/analytics/ai-chat", label: "AI Assistant", icon: Bot },
     { href: "/upload", label: "Upload New Data", icon: Upload },
   ]

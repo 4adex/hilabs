@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import requests
 import os
 import logging
+import time
 from typing import List, Optional
 import json
 import uvicorn
@@ -56,6 +57,47 @@ class HealthResponse(BaseModel):
     database: str
     ai_model: str
 
+class Provider(BaseModel):
+    provider_id: Optional[str] = None
+    npi: Optional[int] = None
+    full_name: Optional[str] = None
+    primary_specialty: Optional[str] = None
+    license_number: Optional[str] = None
+    license_state: Optional[str] = None
+
+class ProvidersResponse(BaseModel):
+    providers: List[Provider]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
+class Duplicate(BaseModel):
+    i1: Optional[int] = None
+    i2: Optional[int] = None
+    provider_id_1: Optional[str] = None
+    provider_id_2: Optional[str] = None
+    name_1: Optional[str] = None
+    name_2: Optional[str] = None
+    score: Optional[float] = None
+    name_score: Optional[float] = None
+    npi_match: Optional[bool] = None
+    addr_score: Optional[float] = None
+    phone_match: Optional[bool] = None
+    license_score: Optional[float] = None
+
+class ClusterInfo(BaseModel):
+    cluster_id: str
+    members: List[int]
+    representative: int
+    providers: List[Provider]
+    duplicates: List[Duplicate]
+
+class DuplicatesResponse(BaseModel):
+    clusters: List[ClusterInfo]
+    total_clusters: int
+    total_duplicates: int
+
 # Dependency to get database session
 def get_db():
     db = SessionLocal()
@@ -68,36 +110,48 @@ def get_db():
 def generate_sql_query(question: str) -> str:
     """Generate SQL query using the AI model"""
     try:
-        # Prepare the prompt for SQLCoder
+        # Prepare the prompt for SQLCoder with actual database schema
         schema_context = """
         Database Schema:
         
-        Table: employees
-        Columns: id (INT, PRIMARY KEY), first_name (VARCHAR), last_name (VARCHAR), 
-                email (VARCHAR), department (VARCHAR), position (VARCHAR), 
-                salary (DECIMAL), hire_date (DATE), manager_id (INT), active (BOOLEAN)
+        Table: duplicates
+        Columns: i1 (BIGINT), i2 (BIGINT), provider_id_1 (TEXT), provider_id_2 (TEXT), 
+                name_1 (TEXT), name_2 (TEXT), score (DOUBLE), name_score (DOUBLE), 
+                npi_match (TINYINT(1)), addr_score (DOUBLE), phone_match (TINYINT(1)), 
+                license_score (DOUBLE)
+        Description: Contains duplicate provider records with similarity scores
         
-        Table: departments  
-        Columns: id (INT, PRIMARY KEY), name (VARCHAR), description (TEXT), 
-                budget (DECIMAL), head_id (INT)
-        
-        Table: projects
-        Columns: id (INT, PRIMARY KEY), name (VARCHAR), description (TEXT), 
-                start_date (DATE), end_date (DATE), budget (DECIMAL), 
-                status (ENUM), department_id (INT)
-        
-        Table: employee_projects
-        Columns: employee_id (INT), project_id (INT), role (VARCHAR), 
-                hours_allocated (DECIMAL), start_date (DATE), end_date (DATE)
+        Table: merged_roster
+        Columns: provider_id (TEXT), npi (BIGINT), first_name (TEXT), last_name (TEXT), 
+                credential (TEXT), full_name (TEXT), primary_specialty (TEXT), 
+                practice_address_line1 (TEXT), practice_address_line2 (TEXT), 
+                practice_city (TEXT), practice_state (TEXT), practice_zip (TEXT), 
+                practice_phone (TEXT), mailing_address_line1 (TEXT), 
+                mailing_address_line2 (TEXT), mailing_city (TEXT), mailing_state (TEXT), 
+                mailing_zip (TEXT), license_number (TEXT), license_state (TEXT), 
+                license_expiration (TEXT), accepting_new_patients (TEXT), 
+                board_certified (TINYINT(1)), years_in_practice (BIGINT), 
+                medical_school (TEXT), residency_program (TEXT), last_updated (TEXT), 
+                taxonomy_code (TEXT), status (TEXT), npi_present (TINYINT(1))
+        Description: Contains healthcare provider information and demographics
         """
+        
+        system_prompt = """You are a SQL assistant for a healthcare provider database. Generate only valid MySQL queries based on the schema provided. Focus on:
+        - Provider data quality analysis
+        - Duplicate detection and resolution
+        - Compliance reporting (license expiration, missing data)
+        - Provider demographics and distribution
+        - Data validation and integrity checks
+        
+        Return only the SQL query without explanations, comments, or formatting."""
         
         prompt = f"""{schema_context}
         
         Question: {question}
         
-        Please generate a MySQL query to answer this question. Return only the SQL query without any explanations.
+        Generate a MySQL query to answer this question. Return only the SQL query.
         """
-                # Call the AI model
+        # Call the AI model
         url = "http://model-runner.docker.internal:12434/engines/llama.cpp/v1/chat/completions"
         response = requests.post(
             url,
@@ -105,7 +159,7 @@ def generate_sql_query(question: str) -> str:
             json={
                 "model": SQL_MODEL_NAME,
                 "messages": [
-                    {"role": "system", "content": "You are a helpful SQL assistant. Generate only valid MySQL queries without explanations."},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt}
                 ],
                 "max_tokens": 500,
@@ -274,6 +328,181 @@ async def process_csv(file: UploadFile = File(...), db: Session = Depends(get_db
     except Exception as e:
         logger.error(f"Error processing CSV: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing CSV: {str(e)}")
+
+
+@app.get("/providers", response_model=ProvidersResponse)
+async def get_providers(
+    page: int = 1, 
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    """Get paginated list of providers with specific columns"""
+    try:
+        # Calculate offset
+        offset = (page - 1) * limit
+        
+        # Get total count
+        count_query = text("SELECT COUNT(*) FROM merged_roster")
+        total_result = db.execute(count_query)
+        total = total_result.scalar()
+        
+        # Get providers with pagination
+        query = text("""
+            SELECT 
+                provider_id,
+                npi,
+                full_name,
+                primary_specialty,
+                license_number,
+                license_state
+            FROM merged_roster 
+            ORDER BY provider_id
+            LIMIT :limit OFFSET :offset
+        """)
+        
+        result = db.execute(query, {"limit": limit, "offset": offset})
+        rows = result.fetchall()
+        
+        # Convert to Provider objects
+        providers = []
+        for row in rows:
+            provider = Provider(
+                provider_id=row[0],
+                npi=row[1],
+                full_name=row[2],
+                primary_specialty=row[3],
+                license_number=row[4],
+                license_state=row[5]
+            )
+            providers.append(provider)
+        
+        # Calculate total pages
+        total_pages = (total + limit - 1) // limit
+        
+        return ProvidersResponse(
+            providers=providers,
+            total=total,
+            page=page,
+            limit=limit,
+            total_pages=total_pages
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching providers: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching providers: {str(e)}")
+
+
+@app.get("/duplicates", response_model=DuplicatesResponse)
+async def get_duplicates(db: Session = Depends(get_db)):
+    """Get duplicate clusters with provider information"""
+    try:
+        # Get all duplicates from the database
+        duplicates_query = text("""
+            SELECT 
+                i1, i2, provider_id_1, provider_id_2, name_1, name_2,
+                score, name_score, npi_match, addr_score, phone_match, license_score
+            FROM duplicates
+            ORDER BY score DESC
+        """)
+        
+        duplicates_result = db.execute(duplicates_query)
+        duplicates_rows = duplicates_result.fetchall()
+        
+        # Build clusters from duplicates
+        clusters_map = {}
+        processed_pairs = set()
+        
+        for row in duplicates_rows:
+            i1, i2 = row[0], row[1]
+            if (i1, i2) in processed_pairs or (i2, i1) in processed_pairs:
+                continue
+                
+            processed_pairs.add((i1, i2))
+            
+            # Find existing cluster or create new one
+            cluster_id = None
+            for cid, cluster_data in clusters_map.items():
+                if i1 in cluster_data['members'] or i2 in cluster_data['members']:
+                    cluster_id = cid
+                    break
+            
+            if cluster_id is None:
+                cluster_id = f"cluster_{min(i1, i2)}"
+                clusters_map[cluster_id] = {
+                    'members': set(),
+                    'representative': min(i1, i2),
+                    'duplicates': []
+                }
+            
+            clusters_map[cluster_id]['members'].add(i1)
+            clusters_map[cluster_id]['members'].add(i2)
+            
+            duplicate = Duplicate(
+                i1=row[0], i2=row[1], provider_id_1=row[2], provider_id_2=row[3],
+                name_1=row[4], name_2=row[5], score=row[6], name_score=row[7],
+                npi_match=bool(row[8]) if row[8] is not None else None,
+                addr_score=row[9], phone_match=bool(row[10]) if row[10] is not None else None,
+                license_score=row[11]
+            )
+            clusters_map[cluster_id]['duplicates'].append(duplicate)
+        
+        # Get provider details for each cluster
+        cluster_infos = []
+        for cluster_id, cluster_data in clusters_map.items():
+            member_ids = list(cluster_data['members'])
+            
+            # Get provider details for cluster members
+            if member_ids:
+                # Create a query to get providers by their row position (0-indexed)
+                # We'll use LIMIT and OFFSET to get specific rows
+                cluster_providers = []
+                
+                for member_id in member_ids:
+                    provider_query = text("""
+                        SELECT 
+                            provider_id, npi, full_name, primary_specialty, license_number, license_state
+                        FROM merged_roster 
+                        ORDER BY provider_id
+                        LIMIT 1 OFFSET :offset
+                    """)
+                    
+                    try:
+                        provider_result = db.execute(provider_query, {"offset": member_id})
+                        provider_row = provider_result.fetchone()
+                        
+                        if provider_row:
+                            provider = Provider(
+                                provider_id=provider_row[0],
+                                npi=provider_row[1], 
+                                full_name=provider_row[2],
+                                primary_specialty=provider_row[3], 
+                                license_number=provider_row[4], 
+                                license_state=provider_row[5]
+                            )
+                            cluster_providers.append(provider)
+                    except Exception as e:
+                        logger.warning(f"Could not fetch provider at index {member_id}: {str(e)}")
+                        continue
+                
+                if cluster_providers:  # Only create cluster if we found providers
+                    cluster_info = ClusterInfo(
+                        cluster_id=cluster_id,
+                        members=member_ids,
+                        representative=cluster_data['representative'],
+                        providers=cluster_providers,
+                        duplicates=cluster_data['duplicates']
+                    )
+                    cluster_infos.append(cluster_info)
+        
+        return DuplicatesResponse(
+            clusters=cluster_infos,
+            total_clusters=len(cluster_infos),
+            total_duplicates=len(duplicates_rows)
+        )
+        
+    except Exception as e:
+        logger.error(f"Error fetching duplicates: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching duplicates: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { FileText, AlertTriangle, BarChart3, PieChart, Bot } from "lucide-react"
+import { FileText, AlertTriangle, BarChart3, PieChart, Bot, Users } from "lucide-react"
 import { DataQualityChart } from "@/components/analytics/data-quality-chart"
 import { IssuesBySpecialtyChart } from "@/components/analytics/issues-by-specialty-chart"
 import { Sidebar } from "@/components/layout/sidebar"
@@ -130,6 +130,18 @@ export default function AnalyticsPage() {
               </div>
               <div className="flex items-center space-x-2">
                 <ThemeToggle />
+                <Link href="/analytics/providers">
+                  <Button size="sm" variant="outline">
+                    <Users className="w-4 h-4 mr-2" />
+                    View All Providers
+                  </Button>
+                </Link>
+                <Link href="/analytics/duplicates">
+                  <Button size="sm" variant="outline">
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    View Duplication Analysis
+                  </Button>
+                </Link>
                 <Link href="/analytics/ai-chat">
                   <Button size="sm" className="bg-primary">
                     <Bot className="w-4 h-4 mr-2" />
@@ -155,7 +167,17 @@ export default function AnalyticsPage() {
                 <CardContent className="p-4">
                   <div className="text-sm font-medium text-muted-foreground mb-1">Data Quality Score</div>
                   <div className="text-2xl font-bold">{metrics.dataQualityScore}%</div>
-                  <div className="text-xs text-green-600 dark:text-green-400">↑ 2.1% vs last week</div>
+                  <div className="text-xs">
+                    {metrics.dataQualityScore >= 90 ? (
+                      <span className="text-green-600 dark:text-green-400">Excellent</span>
+                    ) : metrics.dataQualityScore >= 80 ? (
+                      <span className="text-blue-600 dark:text-blue-400">Good Enough</span>
+                    ) : metrics.dataQualityScore >= 70 ? (
+                      <span className="text-yellow-600 dark:text-yellow-400">Needs Improvement</span>
+                    ) : (
+                      <span className="text-red-600 dark:text-red-400">Critical</span>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
               <Card className="border-l-4 border-l-green-500">
@@ -167,16 +189,24 @@ export default function AnalyticsPage() {
               </Card>
               <Card className="border-l-4 border-l-red-500">
                 <CardContent className="p-4">
-                  <div className="text-sm font-medium text-muted-foreground mb-1">Critical Issues</div>
-                  <div className="text-2xl font-bold">{metrics.criticalIssues}</div>
-                  <div className="text-xs text-red-600 dark:text-red-400">↑ 3 new this week</div>
+                  <div className="text-sm font-medium text-muted-foreground mb-1">Providers Available</div>
+                  <div className="text-2xl font-bold">{metrics.providersAvailable}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {((metrics.providersAvailable / metrics.totalProviders) * 100).toFixed(1)}% of total providers
+                  </div>
                 </CardContent>
               </Card>
               <Card className="border-l-4 border-l-purple-500">
                 <CardContent className="p-4">
                   <div className="text-sm font-medium text-muted-foreground mb-1">Compliance Rate</div>
                   <div className="text-2xl font-bold">{metrics.complianceRate}%</div>
-                  <div className="text-xs text-green-600 dark:text-green-400">↑ 1.2% improvement</div>
+                    <div className="text-xs">
+                    {metrics.complianceRate >= 50 ? (
+                      <span className="text-green-600 dark:text-green-400">Above target</span>
+                    ) : (
+                      <span className="text-red-600 dark:text-red-400">Below target</span>
+                    )}
+                    </div>
                 </CardContent>
               </Card>
               <Card className="border-l-4 border-l-yellow-500">
@@ -190,42 +220,43 @@ export default function AnalyticsPage() {
               </Card>
             </div>
 
-            {/* Compact Filters */}
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-medium">Quick Filters</h3>
-                  <div className="flex items-center space-x-3">
-                    <Select defaultValue="all">
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All States</SelectItem>
-                        <SelectItem value="ca">California</SelectItem>
-                        <SelectItem value="ny">New York</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select defaultValue="all">
-                      <SelectTrigger className="w-36">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Specialties</SelectItem>
-                        <SelectItem value="cardiology">Cardiology</SelectItem>
-                        <SelectItem value="internal">Internal Medicine</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select defaultValue="30">
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="7">7 Days</SelectItem>
-                        <SelectItem value="30">30 Days</SelectItem>
-                        <SelectItem value="90">90 Days</SelectItem>
-                      </SelectContent>
-                    </Select>
+            {/* Data Summary Section */}
+            <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-200 dark:border-green-800">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold mb-3 flex items-center">
+                      <FileText className="w-5 h-5 mr-2 text-green-600 dark:text-green-400" />
+                      Data Summary & Insights
+                    </h3>
+                    <div className="prose prose-sm text-muted-foreground mb-4 max-w-none">
+                      <p className="mb-2">
+                        Your provider network currently has <strong className="text-foreground">{metrics.totalProviders.toLocaleString()} total providers</strong> with 
+                        a <strong className="text-foreground">{metrics.dataQualityScore}% data quality score</strong>. Key areas requiring attention include:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-sm">
+                        <li><strong className="text-foreground">{metrics.expiredLicensesPercent}%</strong> of providers have expired licenses ({metrics.expiredLicensesCount} providers)</li>
+                        <li><strong className="text-foreground">{metrics.missingNpi.toLocaleString()}</strong> providers are missing NPI numbers</li>
+                        <li><strong className="text-foreground">{metrics.formattingIssues}</strong> providers have formatting issues in their contact information</li>
+                        <li>Current compliance rate stands at <strong className="text-foreground">{metrics.complianceRate}%</strong></li>
+                      </ul>
+                      <p className="mt-3 text-sm">
+                        The system has identified <strong className="text-foreground">{metrics.totalClusters} duplicate clusters</strong> affecting 
+                        <strong className="text-foreground"> {metrics.uniqueInvolved} providers</strong>, with <strong className="text-foreground">{metrics.providersAvailable}</strong> providers 
+                        currently available for patient scheduling.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="ml-6 flex flex-col items-end space-y-3">
+                    <Link href="/analytics/ai-chat">
+                      <Button size="lg" className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg">
+                        <Bot className="w-5 h-5 mr-2" />
+                        Chat for More Details
+                      </Button>
+                    </Link>
+                    <p className="text-xs text-muted-foreground text-center max-w-[200px]">
+                      Get AI-powered insights and detailed analysis of your provider data
+                    </p>
                   </div>
                 </div>
               </CardContent>

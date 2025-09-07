@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Users, AlertTriangle } from "lucide-react"
+import { Users, AlertTriangle, ArrowRight } from "lucide-react"
+import Link from "next/link"
 
 const duplicates = [
   {
@@ -36,10 +37,18 @@ export function DuplicateDetectionPanel() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center font-heading">
-            <Users className="w-5 h-5 mr-2" />
-            Duplicate Detection Results
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center font-heading">
+              <Users className="w-5 h-5 mr-2" />
+              Duplicate Detection Results
+            </CardTitle>
+            <Link href="/analytics/duplicates">
+              <Button size="sm" variant="outline">
+                Manage All Duplicates
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">

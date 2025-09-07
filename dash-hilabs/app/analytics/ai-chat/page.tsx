@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Sidebar } from "@/components/layout/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { 
@@ -22,8 +24,17 @@ import {
   RefreshCw,
   Copy,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  Database
 } from "lucide-react"
+
+interface QueryResult {
+  question: string
+  sql_query: string
+  results: any[]
+  success: boolean
+  error?: string
+}
 
 interface Message {
   id: string
@@ -31,6 +42,7 @@ interface Message {
   content: string
   timestamp: Date
   isLoading?: boolean
+  queryResult?: QueryResult
 }
 
 const suggestedQueries = [
@@ -38,36 +50,36 @@ const suggestedQueries = [
     category: "Data Quality",
     queries: [
       "How many providers have expired licenses?",
-      "Show me providers with phone formatting issues",
-      "Which providers have missing NPI numbers?",
-      "Analyze data quality trends over the last 30 days"
+      "Show me providers with missing NPI numbers",
+      "Which providers have formatting issues in phone numbers?",
+      "Find all providers with missing primary specialty"
     ]
   },
   {
-    category: "Compliance & Risk",
+    category: "Duplicate Detection", 
     queries: [
-      "Generate compliance report for expired licenses",
-      "Show high-risk providers requiring immediate attention",
-      "What's our current compliance rate by specialty?",
-      "List providers with multiple data quality issues"
+      "Show me all duplicate provider pairs",
+      "Find duplicates with high name similarity scores",
+      "Which providers have NPI matches in duplicates?",
+      "List duplicate clusters with address score above 0.8"
     ]
   },
   {
-    category: "Analytics & Insights",
+    category: "Provider Analytics",
     queries: [
-      "Which specialties have the most data issues?",
-      "Show me duplicate detection results",
-      "Analyze provider distribution by state",
-      "What are the most common data quality problems?"
+      "Show provider distribution by specialty",
+      "List providers by practice state",
+      "Find board certified providers in California",
+      "Show providers accepting new patients"
     ]
   },
   {
-    category: "Reports & Export",
+    category: "Compliance & Licensing",
     queries: [
-      "Export list of providers with expired licenses",
-      "Generate monthly data quality summary",
-      "Create specialty-wise compliance report",
-      "Download provider contact validation results"
+      "List providers with licenses expiring soon",
+      "Find providers without license numbers", 
+      "Show license distribution by state",
+      "Find providers with expired licenses"
     ]
   }
 ]
@@ -77,7 +89,7 @@ export default function AIChatPage() {
     {
       id: "1",
       type: "assistant",
-      content: "Hello! I'm your Provider Analytics AI Assistant. I have access to your complete provider database and can help you with data quality analysis, compliance reporting, and generating insights. How can I assist you today?",
+      content: "Hello! I'm your Provider Database AI Assistant. I can help you query your provider data using natural language. I have access to your merged provider roster and duplicate detection results. Ask me anything about your healthcare provider data!",
       timestamp: new Date(),
     },
   ])
@@ -105,6 +117,7 @@ export default function AIChatPage() {
     }
 
     setMessages((prev) => [...prev, userMessage])
+    const currentInput = input
     setInput("")
     setIsLoading(true)
 
@@ -112,91 +125,89 @@ export default function AIChatPage() {
     const loadingMessage: Message = {
       id: (Date.now() + 1).toString(),
       type: "assistant",
-      content: "Analyzing your request...",
+      content: "Analyzing your query and generating SQL...",
       timestamp: new Date(),
       isLoading: true,
     }
     setMessages((prev) => [...prev, loadingMessage])
 
-    // Simulate AI response with more realistic delay
-    setTimeout(() => {
-      const responses = [
-        `Based on your query "${input}", I've analyzed your provider database. Here are the key findings:
+    try {
+      // Call the backend API
+      const response = await fetch('http://localhost:8000/query', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: currentInput
+        }),
+      })
 
-**Current Status:**
-• Total providers analyzed: 1,247
-• Providers with expired licenses: 23 (1.8%)
-• Compliance rate: 94.3%
+      const result: QueryResult = await response.json()
 
-**Detailed Breakdown:**
-- Cardiology: 8 expired licenses
-- Internal Medicine: 6 expired licenses  
-- Pulmonology: 4 expired licenses
-- Other specialties: 5 expired licenses
+      if (result.success && result.results.length > 0) {
+        // Create response message with query results
+        const responseMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          type: "assistant",
+          content: `I found ${result.results.length} result(s) for your query. Here's the data:`,
+          timestamp: new Date(),
+          queryResult: result,
+        }
 
-**Recommended Actions:**
-1. Immediate notification to providers with expired licenses
-2. Set up automated renewal reminders
-3. Review credentialing processes
+        setMessages((prev) => 
+          prev.map((msg) => 
+            msg.isLoading ? responseMessage : msg
+          )
+        )
+      } else if (result.success && result.results.length === 0) {
+        // No results found
+        const responseMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          type: "assistant", 
+          content: `Query executed successfully, but no results were found.`,
+          timestamp: new Date(),
+          queryResult: result,
+        }
 
-Would you like me to generate a detailed compliance report or help you with the next steps?`,
+        setMessages((prev) => 
+          prev.map((msg) => 
+            msg.isLoading ? responseMessage : msg
+          )
+        )
+      } else {
+        // Error in query execution
+        const errorMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          type: "assistant",
+          content: `I encountered an error while processing your query: ${result.error || 'Unknown error'}`,
+          timestamp: new Date(),
+          queryResult: result,
+        }
 
-        `I've processed your request and found the following insights:
+        setMessages((prev) => 
+          prev.map((msg) => 
+            msg.isLoading ? errorMessage : msg
+          )
+        )
+      }
+    } catch (error) {
+      // Network or other error
+      const errorMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        type: "assistant",
+        content: `I couldn't connect to the database. Please make sure the backend service is running.`,
+        timestamp: new Date(),
+      }
 
-**Data Quality Analysis Results:**
-• Phone format issues: 45 providers (3.6%)
-• Missing NPI numbers: 12 providers (0.9%)
-• Address format problems: 31 providers (2.5%)
-
-**Geographic Distribution:**
-- California: 15 phone format issues
-- New York: 12 phone format issues
-- Texas: 8 phone format issues
-- Other states: 10 phone format issues
-
-**Impact Assessment:**
-- High priority fixes needed: 18 providers
-- Medium priority: 27 providers
-- Low priority: 0 providers
-
-I can help you export this data or create automated validation rules. What would you prefer?`,
-
-        `Here's a comprehensive analysis of your provider data quality:
-
-**Overall Health Score: 87.3%**
-
-**Top Issues by Category:**
-1. **License Management (Priority: High)**
-   - 23 expired licenses requiring immediate renewal
-   - 7 licenses expiring within 30 days
-   
-2. **Contact Information (Priority: Medium)**
-   - 45 phone number formatting inconsistencies
-   - 31 address standardization needs
-   
-3. **Professional Details (Priority: Low)**
-   - 12 missing NPI numbers
-   - 8 specialty classification updates needed
-
-**Trend Analysis:**
-- Data quality improved by 2.1% this month
-- License compliance up 1.2% from last quarter
-- New validation rules reduced errors by 15%
-
-Would you like me to dive deeper into any specific area or generate action items?`
-      ]
-
-      const randomResponse = responses[Math.floor(Math.random() * responses.length)]
-      
       setMessages((prev) => 
         prev.map((msg) => 
-          msg.isLoading 
-            ? { ...msg, content: randomResponse, isLoading: false }
-            : msg
+          msg.isLoading ? errorMessage : msg
         )
       )
+    } finally {
       setIsLoading(false)
-    }, 2000)
+    }
   }
 
   const handleSuggestedQuery = (query: string) => {
@@ -213,6 +224,39 @@ Would you like me to dive deeper into any specific area or generate action items
 
   const copyMessage = (content: string) => {
     navigator.clipboard.writeText(content)
+  }
+
+  const copySqlQuery = (query: string) => {
+    navigator.clipboard.writeText(query)
+  }
+
+  const exportTableData = (data: any[]) => {
+    if (data.length === 0) return
+    
+    const headers = Object.keys(data[0])
+    const csvContent = [
+      headers.join(','),
+      ...data.map(row => 
+        headers.map(header => {
+          const value = row[header]
+          // Escape commas and quotes in CSV
+          if (value === null || value === undefined) return ''
+          const stringValue = String(value)
+          if (stringValue.includes(',') || stringValue.includes('"')) {
+            return `"${stringValue.replace(/"/g, '""')}"`
+          }
+          return stringValue
+        }).join(',')
+      )
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'query_results.csv'
+    a.click()
+    window.URL.revokeObjectURL(url)
   }
 
   return (
@@ -266,9 +310,9 @@ Would you like me to dive deeper into any specific area or generate action items
                 <div key={categoryIndex}>
                   <h4 className="font-medium text-sm text-muted-foreground mb-3 flex items-center">
                     {category.category === "Data Quality" && <BarChart3 className="w-4 h-4 mr-2" />}
-                    {category.category === "Compliance & Risk" && <AlertTriangle className="w-4 h-4 mr-2" />}
-                    {category.category === "Analytics & Insights" && <MessageSquare className="w-4 h-4 mr-2" />}
-                    {category.category === "Reports & Export" && <FileText className="w-4 h-4 mr-2" />}
+                    {category.category === "Duplicate Detection" && <AlertTriangle className="w-4 h-4 mr-2" />}
+                    {category.category === "Provider Analytics" && <MessageSquare className="w-4 h-4 mr-2" />}
+                    {category.category === "Compliance & Licensing" && <FileText className="w-4 h-4 mr-2" />}
                     {category.category}
                   </h4>
                   <div className="space-y-2">
@@ -323,25 +367,116 @@ Would you like me to dive deeper into any specific area or generate action items
                           {message.isLoading ? (
                             <div className="flex items-center space-x-2">
                               <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent"></div>
-                              <span>Analyzing your request...</span>
+                              <span>Analyzing your query and generating SQL...</span>
                             </div>
                           ) : (
                             <div className="prose prose-sm max-w-none dark:prose-invert">
-                              {message.content.split('\n').map((line, index) => {
-                                if (line.startsWith('**') && line.endsWith('**')) {
-                                  return <div key={index} className="font-semibold mt-2 mb-1">{line.slice(2, -2)}</div>
-                                }
-                                if (line.startsWith('•') || line.startsWith('-')) {
-                                  return <div key={index} className="ml-4">{line}</div>
-                                }
-                                if (line.trim() === '') {
-                                  return <div key={index} className="h-2"></div>
-                                }
-                                return <div key={index}>{line}</div>
-                              })}
+                              {message.content}
                             </div>
                           )}
                         </div>
+
+                        {/* Query Results Table */}
+                        {message.queryResult && message.queryResult.success && (
+                          <div className="mt-4 w-full max-w-4xl">
+                            {/* SQL Query Display */}
+                            <div className="mb-4">
+                              <div className="text-sm text-muted-foreground mb-2 flex items-center justify-between">
+                                <div className="flex items-center">
+                                  <Database className="w-4 h-4 mr-2" />
+                                  Generated SQL Query:
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => copySqlQuery(message.queryResult!.sql_query)}
+                                  className="h-6 px-2 text-xs"
+                                >
+                                  <Copy className="w-3 h-3 mr-1" />
+                                  Copy SQL
+                                </Button>
+                              </div>
+                              <div className="bg-slate-900 text-slate-100 p-3 rounded-md text-sm font-mono overflow-x-auto">
+                                {message.queryResult.sql_query}
+                              </div>
+                            </div>
+
+                            {/* Results Table */}
+                            {message.queryResult.results.length > 0 ? (
+                              <div className="border rounded-lg overflow-hidden">
+                                <div className="bg-muted/50 px-4 py-2 border-b flex items-center justify-between">
+                                  <div className="text-sm font-medium">
+                                    Query Results ({message.queryResult.results.length} rows)
+                                  </div>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => exportTableData(message.queryResult!.results)}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    <Download className="w-3 h-3 mr-1" />
+                                    Export CSV
+                                  </Button>
+                                </div>
+                                <div className="overflow-x-auto max-h-96">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        {Object.keys(message.queryResult.results[0]).map((header) => (
+                                          <TableHead key={header} className="font-medium">
+                                            {header}
+                                          </TableHead>
+                                        ))}
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {message.queryResult.results.map((row, index) => (
+                                        <TableRow key={index}>
+                                          {Object.values(row).map((value, cellIndex) => (
+                                            <TableCell key={cellIndex} className="text-sm">
+                                              {value !== null && value !== undefined 
+                                                ? String(value) 
+                                                : <span className="text-muted-foreground italic">null</span>
+                                              }
+                                            </TableCell>
+                                          ))}
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </div>
+                            ) : (
+                              <Alert>
+                                <AlertDescription>
+                                  Query executed successfully, but returned no results.
+                                </AlertDescription>
+                              </Alert>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Error Display */}
+                        {message.queryResult && !message.queryResult.success && (
+                          <div className="mt-4 w-full max-w-4xl">
+                            <Alert variant="destructive">
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertDescription>
+                                <div className="space-y-2">
+                                  <div>Error: {message.queryResult.error}</div>
+                                  {message.queryResult.sql_query && (
+                                    <div>
+                                      <div className="text-sm font-medium mb-1">Generated SQL:</div>
+                                      <div className="bg-red-950 text-red-100 p-2 rounded text-sm font-mono">
+                                        {message.queryResult.sql_query}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </AlertDescription>
+                            </Alert>
+                          </div>
+                        )}
                         
                         {/* Message Actions */}
                         {!message.isLoading && message.type === "assistant" && (
@@ -387,7 +522,7 @@ Would you like me to dive deeper into any specific area or generate action items
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyPress={handleKeyPress}
-                      placeholder="Ask me about your provider data, compliance issues, or request analytics reports..."
+                      placeholder="Ask me about your provider database, duplicates, compliance, or request specific data queries..."
                       className="min-h-[80px] resize-none"
                       disabled={isLoading}
                     />
