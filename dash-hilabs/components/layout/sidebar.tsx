@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -26,13 +26,52 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+interface ProcessedData {
+  clusters: Record<
+    string,
+    {
+      members: number[]
+      representative: number
+    }
+  >
+  summary: {
+    total_records: number
+    candidate_pairs: number
+    duplicate_pairs: number
+    unique_involved: number
+    ca_state: number
+    clusters: number
+    compliance_rate: number
+    data_quality_score: number
+    expired_licenses: number
+    final_records: number
+    formatting_issues: number
+    missing_npi: number
+    ny_state: number
+    outliers_removed: number
+    providers_available: number
+  }
+}
+
 interface SidebarProps {
   className?: string
 }
 
 export function Sidebar({ className }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
+  const [processedData, setProcessedData] = useState<ProcessedData | null>(null)
   const pathname = usePathname()
+
+  useEffect(() => {
+    const storedData = localStorage.getItem("processedData")
+    if (storedData) {
+      try {
+        setProcessedData(JSON.parse(storedData))
+      } catch (error) {
+        console.error("Failed to parse stored data:", error)
+      }
+    }
+  }, [])
 
   const navigationLinks = [
     { href: "/analytics", label: "Analytics Dashboard", icon: BarChart3 },
@@ -41,10 +80,30 @@ export function Sidebar({ className }: SidebarProps) {
   ]
 
   const dataQualityIssues = [
-    { icon: FileX, label: "Expired Licenses", count: 23, color: "text-orange-500" },
-    { icon: Copy, label: "Duplicate Records", count: 15, color: "text-yellow-500" },
-    { icon: FileText, label: "Format Issues", count: 89, color: "text-blue-500" },
-    { icon: Phone, label: "Missing NPI", count: 12, color: "text-purple-500" },
+    { 
+      icon: FileX, 
+      label: "Expired Licenses", 
+      count: processedData?.summary.expired_licenses || 471, 
+      color: "text-orange-500" 
+    },
+    { 
+      icon: Copy, 
+      label: "Duplicate Records", 
+      count: processedData?.summary.duplicate_pairs || 42, 
+      color: "text-yellow-500" 
+    },
+    { 
+      icon: FileText, 
+      label: "Format Issues", 
+      count: processedData?.summary.formatting_issues || 59, 
+      color: "text-blue-500" 
+    },
+    { 
+      icon: Phone, 
+      label: "Missing NPI", 
+      count: processedData?.summary.missing_npi || 510, 
+      color: "text-purple-500" 
+    },
   ]
 
   const networkAdequacy = [
@@ -53,8 +112,14 @@ export function Sidebar({ className }: SidebarProps) {
   ]
 
   const geographicFilter = [
-    { label: "New York", count: 234 },
-    { label: "California", count: 189 },
+    { 
+      label: "New York", 
+      count: processedData?.summary.ny_state || 234 
+    },
+    { 
+      label: "California", 
+      count: processedData?.summary.ca_state || 189 
+    },
   ]
 
   return (

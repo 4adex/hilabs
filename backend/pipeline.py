@@ -9,18 +9,23 @@ import os
 
 
 def clean_text(s):
+    """Clean and normalize text for comparison"""
     if s is None or (isinstance(s, float) and pd.isna(s)):
         return ""
     s = str(s).lower()
     s = re.sub(r"[^\w\s]", " ", s)
     return " ".join(s.split())
 
+
 def extract_digits(s):
+    """Extract only digits from string"""
     if s is None or (isinstance(s, float) and pd.isna(s)):
         return ""
     return re.sub(r"\D", "", str(s))
 
+
 def ngrams(s, n=2):
+    """Generate n-grams from string"""
     s = clean_text(s)
     if not s:
         return set()
@@ -29,14 +34,18 @@ def ngrams(s, n=2):
         return {s2}
     return {s2[i:i+n] for i in range(len(s2)-n+1)}
 
+
 def jaccard(a: set, b: set) -> float:
+    """Calculate Jaccard similarity between two sets"""
     if not a and not b:
         return 1.0
     if not a or not b:
         return 0.0
     return len(a & b) / len(a | b)
 
+
 def token_overlap(a, b) -> float:
+    """Calculate token overlap between two strings"""
     a = clean_text(a)
     b = clean_text(b)
     if a == "" and b == "":
@@ -46,7 +55,9 @@ def token_overlap(a, b) -> float:
     ta, tb = set(a.split()), set(b.split())
     return len(ta & tb) / len(ta | tb) if ta and tb else 0.0
 
+
 def phone_match(p1, p2) -> float:
+    """Check if phone numbers match"""
     d1, d2 = extract_digits(p1), extract_digits(p2)
     if not d1 or not d2:
         return 0.0
@@ -56,6 +67,7 @@ def phone_match(p1, p2) -> float:
         l = min(10, max(7, min(len(d1), len(d2))))
         return 1.0 if d1[-l:] == d2[-l:] else 0.0
     return 0.0
+
 
 class DuplicateDetector:
     def __init__(self, threshold=0.7, ngram_n=2, parallel=False, min_block=1, max_block=500):
@@ -67,6 +79,7 @@ class DuplicateDetector:
         self._score_cache: Dict[Tuple[int,int], Tuple[float, Dict]] = {}
 
     def preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Preprocess dataframe for duplicate detection"""
         df = df.copy().reset_index(drop=True)
         df["_clean_name"] = df.get("full_name", "").fillna("").astype(str).apply(clean_text)
         df["_first"] = df.get("first_name", "").fillna("").astype(str).apply(clean_text)
@@ -87,6 +100,7 @@ class DuplicateDetector:
         return df
 
     def create_blocks(self, df: pd.DataFrame) -> Dict[str,List[int]]:
+        """Create blocking keys for efficient comparison"""
         blocks = defaultdict(set)
         for idx, row in df.iterrows():
             if row["_npi"]:
@@ -110,6 +124,7 @@ class DuplicateDetector:
         return {k:list(v) for k,v in blocks.items() if self.min_block <= len(v) <= self.max_block}
 
     def candidate_pairs(self, blocks: Dict[str,List[int]]) -> Set[Tuple[int,int]]:
+        """Generate candidate pairs from blocks"""
         pairs = set()
         for idxs in blocks.values():
             if len(idxs) < 2:
@@ -119,6 +134,7 @@ class DuplicateDetector:
         return pairs
 
     def _compute_score(self, i, j, ri, rj) -> Tuple[float, Dict]:
+        """Compute similarity score between two records"""
         key = (min(i,j), max(i,j))
         if key in self._score_cache:
             return self._score_cache[key]
@@ -146,6 +162,7 @@ class DuplicateDetector:
         return self._score_cache[key]
 
     def _score_wrapper(self, args):
+        """Wrapper for parallel processing"""
         i, j, ri, rj = args
         score, details = self._compute_score(i,j,ri,rj)
         return {
@@ -158,6 +175,7 @@ class DuplicateDetector:
         }
 
     def detect(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, Dict, Dict]:
+        """Main duplicate detection method"""
         proc = self.preprocess(df)
         blocks = self.create_blocks(proc)
         pairs = self.candidate_pairs(blocks)
@@ -227,7 +245,9 @@ class DuplicateDetector:
         clusters_info = {k:{"members":v,"representative":reps[k]} for k,v in clusters.items()}
         return dup_df.reset_index(drop=True), deduped_df, clusters_info, summary
 
+
 def remove_duplicates(df, threshold=0.7, parallel=False):
+    """Remove duplicates from dataframe"""
     detector = DuplicateDetector(threshold=threshold, parallel=parallel)
     dup_df, _, clusters, summary = detector.detect(df)
     if not clusters:
@@ -250,7 +270,6 @@ def standardize_df(df: pd.DataFrame) -> pd.DataFrame:
       - rebuild full_name from first, last, credential
     """
 
-    # --- Standardize practice_phone ---
     def normalize_phone(val):
         if pd.isna(val):
             return np.nan
@@ -259,7 +278,6 @@ def standardize_df(df: pd.DataFrame) -> pd.DataFrame:
 
     df['practice_phone_standardized'] = df['practice_phone'].apply(normalize_phone)
 
-    # --- Normalize mailing_zip ---
     def normalize_zip(val):
         if pd.isna(val):
             return np.nan
@@ -277,7 +295,6 @@ def standardize_df(df: pd.DataFrame) -> pd.DataFrame:
 
     df['mailing_zip'] = df['mailing_zip'].apply(normalize_zip)
 
-    # --- Title case helper ---
     def to_title(val):
         if pd.isna(val):
             return np.nan
@@ -294,7 +311,6 @@ def standardize_df(df: pd.DataFrame) -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].apply(to_title)
 
-    # --- Rebuild full_name ---
     def build_full_name(row):
         first = row.get('first_name')
         last = row.get('last_name')
@@ -307,17 +323,19 @@ def standardize_df(df: pd.DataFrame) -> pd.DataFrame:
         return full
 
     df['full_name'] = df.apply(build_full_name, axis=1)
-
     return df
 
 
 def normalize_license(lic: Optional[str]) -> Optional[str]:
+    """Normalize license number"""
     if pd.isna(lic):
         return None
     s = str(lic).strip().upper().replace("-", "").replace(" ", "")
     return s or None
 
+
 def normalize_datetime(x) -> Optional[pd.Timestamp]:
+    """Normalize datetime values"""
     try:
         if pd.isna(x) or x == "":
             return None
@@ -325,29 +343,22 @@ def normalize_datetime(x) -> Optional[pd.Timestamp]:
     except:
         return None
 
-def normalize_bools(x) -> Optional[bool]:
-    if pd.isna(x):
-        return None
-    if isinstance(x, bool):
-        return x
-    s = str(x).strip().lower()
-    if s in {"true","yes","y","1","t"}:
-        return True
-    if s in {"false","no","n","0","f"}:
-        return False
-    return None
 
 def normalize_npi(x) -> Optional[str]:
+    """Normalize NPI values"""
     if pd.isna(x):
         return None
     s = str(x).strip()
     return s if s else None
 
+
 def merge_roster(df_clean: pd.DataFrame, base_path: str) -> pd.DataFrame:
+    """Merge with external roster data"""
     files = {
         "ca": os.path.join(base_path, "ca.csv"),
         "ny": os.path.join(base_path, "ny.csv"),
-        "npi": os.path.join(base_path, "npi.csv")
+        "npi": os.path.join(base_path, "npi.csv"),
+        "mock_npi": os.path.join(base_path, "mock_npi.csv")
     }
 
     tables = {}
@@ -358,6 +369,7 @@ def merge_roster(df_clean: pd.DataFrame, base_path: str) -> pd.DataFrame:
     ca_df = tables.get("ca", pd.DataFrame())
     ny_df = tables.get("ny", pd.DataFrame())
     npi_df = tables.get("npi", pd.DataFrame())
+    mock_npi_df = tables.get("mock_npi", pd.DataFrame())
 
     df_clean['license_number_norm'] = df_clean['license_number'].apply(normalize_license)
     if not ca_df.empty:
@@ -390,20 +402,376 @@ def merge_roster(df_clean: pd.DataFrame, base_path: str) -> pd.DataFrame:
         merged_df['npi_norm'] = merged_df['npi'].apply(normalize_npi)
         merged_df = merged_df.merge(npi_df, left_on='npi_norm', right_on='npi_norm', how='left')
 
-    merged_df.drop(columns=['license_number_norm','license_expiration_norm','expiration_date_norm','npi_norm'], errors='ignore', inplace=True)
+    if not mock_npi_df.empty and 'npi' in mock_npi_df.columns:
+        mock_npi_set = set(mock_npi_df['npi'].apply(normalize_npi).dropna())
+        merged_df['npi_present'] = merged_df['npi'].apply(
+            lambda x: normalize_npi(x) in mock_npi_set if normalize_npi(x) is not None else False
+        )
+    else:
+        merged_df['npi_present'] = False
 
+    merged_df.drop(columns=['license_number_norm','license_expiration_norm','expiration_date_norm','npi_norm'], errors='ignore', inplace=True)
     return merged_df
 
 
-# df = pd.read_csv('roster.csv') 
-# dup_df, deduped_df, clusters, summary = remove_duplicates(df, threshold=0.72)
-# df_clean = standardize_df(deduped_df)
-# merged_df = merge_roster(df_clean, ".") #base path of the dataset
+def remove_outliers(df: pd.DataFrame, column: str = 'years_in_practice', min_val: int = 0, max_val: int = 60) -> pd.DataFrame:
+    """Remove outliers from specified column"""
+    if column not in df.columns:
+        return df.copy()
+    return df[(df[column] >= min_val) & (df[column] <= max_val)].copy()
 
-## We will save dup_df, clusters, merged_df in the sql engine, give its output to the 
 
-def preprocessing(roster_df, base_path):
+class DataQualityAssessment:
+    def __init__(self, df: pd.DataFrame):
+        self.df = df.copy()
+        self.total_records = len(df)
+
+    def normalize_phone(self, val):
+        """Normalize phone number to digits only"""
+        if pd.isna(val):
+            return None
+        digits = re.sub(r'\D+', '', str(val))
+        return digits if digits else None
+
+    def normalize_zip(self, val):
+        """Normalize ZIP code"""
+        if pd.isna(val):
+            return None
+        s = str(val).strip()
+        digits = re.sub(r'\D+', '', s)
+        if digits == "":
+            return None
+        if len(digits) < 5:
+            return digits.zfill(5)
+        if len(digits) == 5:
+            return digits
+        if len(digits) == 9:
+            return digits[:5] + "-" + digits[5:]
+        return digits
+
+    def assess_completeness(self) -> Dict:
+        """Assess data completeness for critical fields only"""
+        issues = {}
+        critical_fields = [
+            'first_name', 'last_name', 'npi', 'license_number', 'license_state',
+            'credential', 'practice_phone', 'years_in_practice', 'practice_city',
+            'practice_address_line1'
+        ]
+
+        critical_missing = 0
+        critical_total = 0
+
+        for field in critical_fields:
+            if field in self.df.columns:
+                missing_count = self.df[field].isnull().sum()
+                critical_missing += missing_count
+                critical_total += len(self.df)
+
+        if critical_total > 0:
+            issues['completeness_score'] = max(0, 100 - (critical_missing / critical_total) * 100)
+        else:
+            issues['completeness_score'] = 100
+
+        return issues
+
+    def assess_validity_formats(self) -> Dict:
+        """Assess format validity based on standardization rules"""
+        issues = {}
+        total_format_errors = 0
+        total_applicable_cells = 0
+
+        if 'npi' in self.df.columns:
+            npi_errors = sum(1 for npi in self.df['npi'].dropna() 
+                           if not re.match(r'^\d{10}$', str(npi).strip()))
+            npi_count = self.df['npi'].notna().sum()
+            total_format_errors += npi_errors
+            total_applicable_cells += npi_count
+
+        if 'practice_phone' in self.df.columns:
+            phone_errors = sum(1 for phone in self.df['practice_phone'].dropna() 
+                             if self.normalize_phone(phone) is None or len(self.normalize_phone(phone)) != 10)
+            phone_count = self.df['practice_phone'].notna().sum()
+            total_format_errors += phone_errors
+            total_applicable_cells += phone_count
+
+        zip_columns = ['practice_zip', 'mailing_zip']
+        for col in zip_columns:
+            if col in self.df.columns:
+                zip_errors = sum(1 for zip_code in self.df[col].dropna() 
+                               if self.normalize_zip(zip_code) is None or 
+                               not re.match(r'^\d{5}(-\d{4})?$', self.normalize_zip(zip_code)))
+                zip_count = self.df[col].notna().sum()
+                total_format_errors += zip_errors
+                total_applicable_cells += zip_count
+
+        issues['total_format_errors'] = total_format_errors
+        if total_applicable_cells > 0:
+            issues['validity_score'] = max(0, 100 - (total_format_errors / total_applicable_cells) * 100)
+        else:
+            issues['validity_score'] = 100
+
+        return issues
+
+    def to_title_case(self, val):
+        """Convert to title case"""
+        if pd.isna(val):
+            return None
+        return str(val).strip().title()
+
+    def assess_consistency(self) -> Dict:
+        """Assess data consistency based on standardization rules"""
+        issues = {}
+        total_inconsistencies = 0
+        total_consistency_cells = 0
+
+        title_cols = [
+            'first_name', 'last_name', 'practice_city', 'mailing_city',
+            'practice_address_line1', 'practice_address_line2',
+            'mailing_address_line1', 'mailing_address_line2',
+            'medical_school', 'residency_program'
+        ]
+
+        for col in title_cols:
+            if col in self.df.columns:
+                inconsistent_count = sum(1 for val in self.df[col].dropna() 
+                                       if str(val).strip() != self.to_title_case(val))
+                col_count = self.df[col].notna().sum()
+                total_inconsistencies += inconsistent_count
+                total_consistency_cells += col_count
+
+        if 'practice_phone' in self.df.columns:
+            phone_inconsistent = sum(1 for phone in self.df['practice_phone'].dropna() 
+                                   if re.search(r'[^\d]', str(phone)))
+            phone_count = self.df['practice_phone'].notna().sum()
+            total_inconsistencies += phone_inconsistent
+            total_consistency_cells += phone_count
+
+        if total_consistency_cells > 0:
+            issues['consistency_score'] = max(0, 100 - (total_inconsistencies / total_consistency_cells) * 100)
+        else:
+            issues['consistency_score'] = 100
+
+        return issues
+
+    def assess_uniqueness(self, summary: Dict) -> Dict:
+        """Assess data uniqueness using information from summary"""
+        issues = {}
+        unique_involved = summary.get('unique_involved', 0)
+
+        npi_duplicates = 0
+        if 'npi' in self.df.columns:
+            npi_duplicates = self.df['npi'].dropna().duplicated().sum()
+
+        license_duplicates = 0
+        if 'license_number' in self.df.columns and 'license_state' in self.df.columns:
+            license_combo = self.df[['license_state', 'license_number']].dropna()
+            license_duplicates = license_combo.duplicated().sum()
+
+        total_uniqueness_issues = unique_involved + npi_duplicates + license_duplicates
+
+        if self.total_records > 0:
+            issues['uniqueness_score'] = max(0, 100 - (total_uniqueness_issues / self.total_records) * 100)
+        else:
+            issues['uniqueness_score'] = 100
+
+        return issues
+
+    def assess_accuracy(self) -> Dict:
+        """Assess data accuracy"""
+        issues = {}
+        total_accuracy_issues = 0
+        total_accuracy_cells = 0
+
+        if 'years_in_practice' in self.df.columns:
+            years_count = self.df['years_in_practice'].notna().sum()
+            outliers = len(self.df[(self.df['years_in_practice'] < 0) | 
+                                 (self.df['years_in_practice'] > 60)])
+            total_accuracy_issues += outliers
+            total_accuracy_cells += years_count
+
+        if total_accuracy_cells > 0:
+            issues['accuracy_score'] = max(0, 100 - (total_accuracy_issues / total_accuracy_cells) * 100)
+        else:
+            issues['accuracy_score'] = 100
+
+        return issues
+
+    def assess_unknown_values(self) -> Dict:
+        """Assess unknown/invalid categorical values"""
+        issues = {}
+        total_unknown = 0
+        total_categorical_cells = 0
+
+        if 'accepting_new_patients' in self.df.columns:
+            valid_values = ['Yes', 'No', 'yes', 'no', 'YES', 'NO', 'Y', 'N', 'y', 'n',
+                          'True', 'False', 'true', 'false', 'TRUE', 'FALSE']
+            categorical_count = self.df['accepting_new_patients'].notna().sum()
+            unknown_count = (~self.df['accepting_new_patients'].isin(valid_values) &
+                           self.df['accepting_new_patients'].notna()).sum()
+            total_unknown += unknown_count
+            total_categorical_cells += categorical_count
+
+        if total_categorical_cells > 0:
+            issues['unknown_values_score'] = max(0, 100 - (total_unknown / total_categorical_cells) * 100)
+        else:
+            issues['unknown_values_score'] = 100
+
+        return issues
+
+    def calculate_overall_quality_score(self, summary: Dict = None) -> Tuple[float, Dict]:
+        """Calculate overall data quality score using average of dimension scores"""
+        if summary is None:
+            summary = {}
+
+        completeness = self.assess_completeness()
+        validity = self.assess_validity_formats()
+        consistency = self.assess_consistency()
+        uniqueness = self.assess_uniqueness(summary)
+        accuracy = self.assess_accuracy()
+        unknown_vals = self.assess_unknown_values()
+
+        dimension_scores = {
+            'completeness': completeness['completeness_score'],
+            'validity': validity['validity_score'],
+            'consistency': consistency['consistency_score'],
+            'uniqueness': uniqueness['uniqueness_score'],
+            'accuracy': accuracy['accuracy_score'],
+            'unknown_values': unknown_vals['unknown_values_score']
+        }
+
+        overall_score = sum(dimension_scores.values()) / len(dimension_scores)
+
+        detailed_issues = {
+            'completeness': completeness,
+            'validity': validity,
+            'consistency': consistency,
+            'uniqueness': uniqueness,
+            'accuracy': accuracy,
+            'unknown_values': unknown_vals,
+            'dimension_scores': dimension_scores,
+            'overall_score': round(overall_score, 2)
+        }
+
+        return overall_score, detailed_issues
+
+
+def calculate_data_quality_score(df: pd.DataFrame, summary: Dict = None) -> Tuple[float, Dict]:
+    """Calculate comprehensive data quality score for the dataset"""
+    if summary is None:
+        summary = {}
+    assessor = DataQualityAssessment(df)
+    return assessor.calculate_overall_quality_score(summary)
+
+
+def create_comprehensive_summary(summary: dict, df_merged: pd.DataFrame, original_df: pd.DataFrame) -> dict:
+    """Create comprehensive summary with all metrics in one place"""
+    
+    # Calculate data quality score
+    quality_score, quality_report = calculate_data_quality_score(original_df, summary)
+    
+    # Add basic metrics
+    summary["final_records"] = len(df_merged)
+    
+    # Add expired licenses count
+    if 'status' in df_merged.columns:
+        status_counts = df_merged['status'].value_counts()
+        expired_statuses = ['Expired', 'Suspended', 'Revoked', 'Inactive']
+        expired_count = sum(status_counts.get(status, 0) for status in expired_statuses)
+        summary["expired_licenses"] = int(expired_count)
+    else:
+        summary["expired_licenses"] = 0
+
+    # Add missing NPI count
+    if 'npi_present' in df_merged.columns:
+        missing_npi = df_merged['npi_present'].value_counts().get(False, 0)
+        summary["missing_npi"] = int(missing_npi)
+    else:
+        summary["missing_npi"] = 0
+
+    # Add providers available count
+    if 'accepting_new_patients' in df_merged.columns:
+        providers_available_count = df_merged[df_merged['accepting_new_patients'] == 'Yes'].shape[0]
+        summary["providers_available"] = int(providers_available_count)
+    else:
+        summary["providers_available"] = 0
+
+    # Add state counts
+    if 'practice_state' in df_merged.columns:
+        state_counts = df_merged['practice_state'].value_counts()
+        summary["ca_state"] = int(state_counts.get('CA', 0))
+        summary["ny_state"] = int(state_counts.get('NY', 0))
+    else:
+        summary["ca_state"] = 0
+        summary["ny_state"] = 0
+
+    # Add formatting issues count
+    validity_issues = DataQualityAssessment(original_df).assess_validity_formats()
+    summary["formatting_issues"] = validity_issues.get("total_format_errors", 0)
+
+    # Calculate compliance rate
+    total_records = summary.get("total_records", len(df_merged))
+    expired_licenses = summary.get("expired_licenses", 0)
+    missing_npi = summary.get("missing_npi", 0)
+
+    if total_records > 0:
+        compliance_rate = (expired_licenses + missing_npi) / total_records * 100
+    else:
+        compliance_rate = 0.0
+
+    summary["compliance_rate"] = round(compliance_rate, 2)
+    
+    # Add data quality score
+    summary["data_quality_score"] = round(quality_score, 2)
+
+    return summary
+
+
+def preprocessing(roster_df: pd.DataFrame, base_path: str, remove_outliers_flag: bool = True) -> Tuple[pd.DataFrame, dict, dict, pd.DataFrame]:
+    """
+    Complete preprocessing pipeline with integrated summary creation
+
+    Returns:
+        dup_df: DataFrame with duplicate pairs information
+        clusters: Dictionary with cluster information  
+        summary: Comprehensive summary dictionary with all metrics
+        merged_df: Final processed and merged DataFrame
+    """
+    # Store original dataframe for quality assessment
+    original_df = roster_df.copy()
+    
+    # Step 1: Remove duplicates
     dup_df, deduped_df, clusters, summary = remove_duplicates(roster_df, threshold=0.72)
+
+    # Step 2: Standardize data
     df_clean = standardize_df(deduped_df)
+
+    # Step 3: Merge with external data
     merged_df = merge_roster(df_clean, base_path)
+
+    # Step 4: Remove outliers if requested
+    if remove_outliers_flag:
+        original_count = len(merged_df)
+        merged_df = remove_outliers(merged_df)
+        outliers_removed = original_count - len(merged_df)
+        summary["outliers_removed"] = outliers_removed
+    else:
+        summary["outliers_removed"] = 0
+
+    # Step 5: Create comprehensive summary with all metrics
+    summary = create_comprehensive_summary(summary, merged_df, original_df)
+
     return dup_df, clusters, summary, merged_df
+
+
+def get_quality_grade(score: float) -> str:
+    """Convert quality score to letter grade"""
+    if score >= 90:
+        return "A (Excellent)"
+    elif score >= 80:
+        return "B (Good)"
+    elif score >= 70:
+        return "C (Fair)"
+    elif score >= 60:
+        return "D (Poor)"
+    else:
+        return "F (Critical Issues)"

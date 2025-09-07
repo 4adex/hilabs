@@ -25,10 +25,17 @@ interface ProcessedData {
     candidate_pairs: number
     duplicate_pairs: number
     unique_involved: number
+    ca_state: number
     clusters: number
-    expired_licenses?: number
-    compliance_rate?: number
-    providers_available?: number
+    compliance_rate: number
+    data_quality_score: number
+    expired_licenses: number
+    final_records: number
+    formatting_issues: number
+    missing_npi: number
+    ny_state: number
+    outliers_removed: number
+    providers_available: number
   }
 }
 
@@ -83,14 +90,22 @@ export default function AnalyticsPage() {
   }, [])
 
   const metrics = {
-    dataQualityScore: processedData?.summary.compliance_rate || 87.3,
-    totalProviders: processedData?.summary.total_records || 1247,
-    criticalIssues: processedData?.summary.duplicate_pairs || 147,
-    complianceRate: processedData?.summary.compliance_rate || 94.3,
-    expiredLicensesCount: processedData?.summary.expired_licenses || 23,
+    dataQualityScore: processedData?.summary.data_quality_score || 86.87,
+    totalProviders: processedData?.summary.total_records || 524,
+    criticalIssues: processedData?.summary.duplicate_pairs || 42,
+    complianceRate: processedData?.summary.compliance_rate || 187.21,
+    expiredLicensesCount: processedData?.summary.expired_licenses || 471,
     expiredLicensesPercent: processedData
       ? (((processedData.summary.expired_licenses || 0) / processedData.summary.total_records) * 100).toFixed(1)
-      : "1.8",
+      : "89.9",
+    candidatePairs: processedData?.summary.candidate_pairs || 46229,
+    totalClusters: processedData?.summary.clusters || 33,
+    uniqueInvolved: processedData?.summary.unique_involved || 71,
+    providersAvailable: processedData?.summary.providers_available || 170,
+    formattingIssues: processedData?.summary.formatting_issues || 59,
+    missingNpi: processedData?.summary.missing_npi || 510,
+    finalRecords: processedData?.summary.final_records || 510,
+    outliersRemoved: processedData?.summary.outliers_removed || 0,
   }
 
   return (
