@@ -1,0 +1,80 @@
+services:
+  # MySQL Database Service
+  mysql:
+    image: mysql:8.0
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: company_db
+      MYSQL_USER: appuser
+      MYSQL_PASSWORD: apppassword
+    ports:
+      - "3307:3307"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # FastAPI Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fastapi_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=mysql+pymysql://appuser:apppassword@mysql:3306/company_db
+      - SQL_MODEL_URL=http://model-runner.docker.internal:12434
+      - SQL_MODEL_NAME=hf.co/unsloth/gemma-3-270m-it-gguf
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - app-network
+    extra_hosts:
+      - "model-runner.docker.internal:host-gateway"
+    models:
+      sql_model:
+        endpoint_var: SQL_MODEL_URL
+        model_var: SQL_MODEL_NAME
+
+  # Next.js Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nextjs_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+# AI Models Configuration
+models:
+  sql_model:
+    model: hf.co/unsloth/gemma-3-270m-it-gguf
+    context_size: 4096
+    runtime_flags:
+      - "--temp"
+      - "0.1"
+      - "--top-k"
+      - "1"
+      - "--threads"
+      - "4"
+
+volumes:
+  mysql_data:
+
+networks:
+  app-network:
+    driver: bridge

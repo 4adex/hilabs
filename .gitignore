@@ -1,0 +1,30 @@
+# Docker Compose AI Application
+# Ignore common files and folders
+
+# Environment files (keep examples)
+.env
+.env.local
+!.env.example
+
+# Docker volumes
+mysql_data/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Build artifacts
+dist/
+build/
