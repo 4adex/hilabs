@@ -47,11 +47,25 @@ services:
         model_var: SQL_MODEL_NAME
 
   # Next.js Frontend Service
-  frontend:
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   container_name: nextjs_frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NEXT_PUBLIC_API_URL=http://localhost:8000
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - app-network
+  
+  frontend-new:
     build:
-      context: ./frontend
+      context: ./dash-hilabs
       dockerfile: Dockerfile
-    container_name: nextjs_frontend
+    container_name: nextjs_frontend_new
     ports:
       - "3000:3000"
     environment:

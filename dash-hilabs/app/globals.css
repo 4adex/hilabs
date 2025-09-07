@@ -1,0 +1,226 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 215 25% 27%;
+    --card: 120 60% 97%;
+    --card-foreground: 215 25% 27%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 27%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 84 81% 44%;
+    --secondary-foreground: 215 25% 27%;
+    --muted: 120 60% 97%;
+    --muted-foreground: 215 25% 27%;
+    --accent: 84 81% 44%;
+    --accent-foreground: 215 25% 27%;
+    --destructive: 25 95% 53%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 91%;
+    --input: 120 60% 97%;
+    --ring: 174 72% 56%;
+    --radius: 0.5rem;
+    --chart-1: 142 76% 36%;
+    --chart-2: 84 81% 44%;
+    --chart-3: 25 95% 53%;
+    --chart-4: 215 25% 27%;
+    --chart-5: 262 83% 58%;
+
+    /* Menu colors */
+    --menu-text: 215 25% 27%;
+    --menu-text-hover: 142 76% 36%;
+    --menu-icon: 215 25% 27%;
+    --menu-icon-hover: 142 76% 36%;
+    --menu-section-label: 215 16% 47%;
+  }
+
+  .dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 84 81% 44%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 84 81% 44%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 25 95% 53%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 174 72% 56%;
+    --chart-1: 142 76% 36%;
+    --chart-2: 84 81% 44%;
+    --chart-3: 25 95% 53%;
+    --chart-4: 215 25% 27%;
+    --chart-5: 262 83% 58%;
+
+    /* Menu colors */
+    --menu-text: 0 0% 98%;
+    --menu-text-hover: 142 76% 36%;
+    --menu-icon: 0 0% 98%;
+    --menu-icon-hover: 142 76% 36%;
+    --menu-section-label: 240 5% 75%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+  body {
+    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+/* Sidebar menu styling with CSS variables for theme customizer sync */
+.sidebar-menu-text {
+  color: hsl(var(--menu-text)) !important;
+}
+
+.sidebar-menu-icon {
+  color: hsl(var(--menu-icon)) !important;
+}
+
+.sidebar-menu-item:hover .sidebar-menu-text {
+  color: hsl(var(--menu-text-hover)) !important;
+}
+
+.sidebar-menu-item:hover .sidebar-menu-icon {
+  color: hsl(var(--menu-icon-hover)) !important;
+}
+
+.sidebar-section-label {
+  color: hsl(var(--menu-section-label)) !important;
+}
+
+/* Force correct colors for common classes */
+.bg-gray-50 {
+  background-color: hsl(120 60% 97%) !important;
+}
+
+.bg-white {
+  background-color: hsl(0 0% 100%) !important;
+}
+
+.text-gray-900 {
+  color: hsl(215 25% 27%) !important;
+}
+
+.text-gray-600 {
+  color: hsl(215 25% 27%) !important;
+}
+
+.text-gray-500 {
+  color: hsl(215 25% 27%) !important;
+}
+
+.border-gray-200 {
+  border-color: hsl(220 13% 91%) !important;
+}
+
+.border-gray-300 {
+  border-color: hsl(220 13% 91%) !important;
+}
+
+/* Dark mode overrides */
+.dark .bg-gray-50 {
+  background-color: hsl(240 3.7% 15.9%) !important;
+}
+
+.dark .bg-white {
+  background-color: hsl(240 10% 3.9%) !important;
+}
+
+.dark .text-gray-900 {
+  color: hsl(0 0% 98%) !important;
+}
+
+.dark .text-gray-600 {
+  color: hsl(240 5% 64.9%) !important;
+}
+
+.dark .text-gray-500 {
+  color: hsl(240 5% 64.9%) !important;
+}
+
+.dark .border-gray-200 {
+  border-color: hsl(240 3.7% 15.9%) !important;
+}
+
+.dark .border-gray-300 {
+  border-color: hsl(240 3.7% 15.9%) !important;
+}
+
+/* RTL Support */
+[dir="rtl"] {
+  direction: rtl;
+}
+
+[dir="rtl"] .ml-auto {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+[dir="rtl"] .mr-auto {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+/* Disable transitions for theme switching */
+*,
+*::before,
+*::after {
+  transition-duration: 0s !important;
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
+
+/* Re-enable specific transitions we want to keep */
+.transition-all,
+.transition-colors,
+.transition-opacity,
+.transition-transform,
+.hover\:scale-105:hover,
+.hover\:shadow-xl:hover {
+  transition-duration: 0.2s !important;
+}
+
+/* Fast theme switching */
+.theme-transition {
+  transition: background-color 0.1s ease, color 0.1s ease, border-color 0.1s ease !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--foreground));
+}
