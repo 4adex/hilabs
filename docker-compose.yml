@@ -12,7 +12,6 @@ services:
       - "3307:3307"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - app-network
     healthcheck:
@@ -28,10 +27,13 @@ services:
     container_name: fastapi_backend
     ports:
       - "8000:8000"
+    volumes:
+      - ./data:/app/data
     environment:
       - DATABASE_URL=mysql+pymysql://appuser:apppassword@mysql:3306/company_db
       - SQL_MODEL_URL=http://model-runner.docker.internal:12434
       - SQL_MODEL_NAME=hf.co/unsloth/gemma-3-270m-it-gguf
+      - DATA_PATH=/app/data
     depends_on:
       mysql:
         condition: service_healthy

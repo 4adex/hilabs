@@ -7,18 +7,10 @@ import requests
 import os
 import logging
 from typing import List, Optional
-import json
-import uvicorn
-from pathlib import Path
-from fastapi import File, UploadFile
-import pandas as pd
-from pipeline import preprocessing
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-
 
 app = FastAPI(title="AI-Powered Database Query API", version="1.0.0")
 
@@ -219,62 +211,45 @@ async def query_database(request: QueryRequest, db: Session = Depends(get_db)):
             success=False,
             error=str(e)
         )
-    
 
-# Endpoint to process uploaded CSV file
-@app.post("/process_csv")
-async def process_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Process uploaded CSV file using preprocessing function"""
+@app.get("/employees")
+async def get_employees(limit: int = 10, db: Session = Depends(get_db)):
+    """Get all employees (mock endpoint)"""
     try:
-        # Read uploaded file into pandas DataFrame
-        contents = await file.read()
-        df = pd.read_csv(pd.io.common.BytesIO(contents))
-        # Use data/ as base path for merge_roster
-        # Use environment variable or fallback to relative path
-        base_path = os.getenv("DATA_PATH", "/app/data")
-        
-        # If environment variable not set, try relative path
-        if base_path == "/app/data" and not os.path.exists(base_path):
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            base_path = os.path.join(current_dir, "..", "data")
-            base_path = os.path.abspath(base_path)
-        
-        # Ensure directory exists
-        os.makedirs(base_path, exist_ok=True)
-        
-        logger.info(f"Base path resolved to: {base_path}")
-        logger.info(f"Base path exists: {os.path.exists(base_path)}")
-        
-        dup_df, clusters, summary, merged_df = preprocessing(df, base_path)
-
-        # Save tables to database using the session
-        try:
-            # Save duplicates
-            if not dup_df.empty:
-                dup_df.to_sql("duplicates", con=db.bind, if_exists="replace", index=False)
-            
-            # Save merged_df
-            if not merged_df.empty:
-                merged_df.to_sql("merged_roster", con=db.bind, if_exists="replace", index=False)
-            
-            # Commit the transaction
-            db.commit()
-            
-        except Exception as db_error:
-            db.rollback()
-            logger.error(f"Database save error: {str(db_error)}")
-            raise HTTPException(status_code=500, detail=f"Database save error: {str(db_error)}")
-            
-        # Convert results to JSON serializable
-        result = {
-            "clusters": clusters,
-            "summary": summary,
-        }
-        return result
+        result = db.execute(text(f"SELECT * FROM employees LIMIT {limit}"))
+        rows = result.fetchall()
+        columns = result.keys()
+        employees = [dict(zip(columns, row)) for row in rows]
+        return {"employees": employees, "count": len(employees)}
     except Exception as e:
-        logger.error(f"Error processing CSV: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing CSV: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/departments")
+async def get_departments(db: Session = Depends(get_db)):
+    """Get all departments (mock endpoint)"""
+    try:
+        result = db.execute(text("SELECT * FROM departments"))
+        rows = result.fetchall()
+        columns = result.keys()
+        departments = [dict(zip(columns, row)) for row in rows]
+        return {"departments": departments, "count": len(departments)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/projects")
+async def get_projects(db: Session = Depends(get_db)):
+    """Get all projects (mock endpoint)"""
+    try:
+        result = db.execute(text("SELECT * FROM projects"))
+        rows = result.fetchall()
+        columns = result.keys()
+        projects = [dict(zip(columns, row)) for row in rows]
+        return {"projects": projects, "count": len(projects)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
